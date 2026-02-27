@@ -4,29 +4,10 @@
 
 ---
 
+
 ## Архитектура:
 
-```
-Yahoo Finance API
-       │
-       ▼
-  [extract.py]          ← Python + yfinance
-       │ CSV
-       ▼
-  data/raw/             ← Landing Zone
-       │
-       ▼
-  [transform.py]        ← PySpark 4.0 (оконные функции, MA_7)
-       │ JDBC
-       ▼
-  PostgreSQL            ← finance_dw.fact_stocks
-       │
-  [Apache Airflow]      ← Оркестрация (расписание + зависимости тасков)
-```
-![alt text]([https://example.com/my-image.svg](https://imgur.com/a/pzKS6JS))
-
-
-> Полная архитектурная схема: `docs/architecture.drawio`
+![Architecture](./Demonstration%20(images)/Architecture.svg)
 
 ---
 
@@ -143,7 +124,7 @@ docker exec finance_warehouse psql -U ВАШ_USERNAME -d finance_dw -c "SELECT t
 
 ---
 
-## 🔄 Как работает DAG
+## Как работает DAG:
 
 ```
 extract  ──►  transform
@@ -156,31 +137,18 @@ extract  ──►  transform
 
 ---
 
-## 🖼️ Скриншоты
+## Скриншоты:
 
 ### Airflow DAG — успешный запуск
-> *(скриншот)*
+> ![DAG](./Demonstration%20(images)/5264992369000520112.jpg)
 
 ### Данные в PostgreSQL
-> *(скриншот)*
+> ![DAG](./Demonstration%20(images)/5265140974868960806.jpg)
 
 ### MA_7 для NVDA
-> *(скриншот)*
+> ![DAG](./Demonstration%20(images)/5265140974868960807.jpg)
 
 ### Docker Desktop
-> *(скриншот)*
-
----
-
-## 🔧 Сервисы Docker Compose
-
-| Сервис | Образ | Описание |
-|---|---|---|
-| postgres | postgres:13 | Хранилище биржевых данных |
-| etl-worker | finance_etl-etl-worker | Python + PySpark воркер |
-| airflow-db | postgres:15 | Метаданные Airflow |
-| airflow-init | apache/airflow:2.9.0 | Инициализация (запускается один раз) |
-| airflow-webserver | apache/airflow:2.9.0 | UI на localhost:8080 |
-| airflow-scheduler | apache/airflow:2.9.0 | Планировщик задач |
+> ![DAG](./Demonstration%20(images)/Docker.png)
 
 ---
