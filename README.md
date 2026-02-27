@@ -23,6 +23,8 @@ Yahoo Finance API
        │
   [Apache Airflow]      ← Оркестрация (расписание + зависимости тасков)
 ```
+![alt text]([https://example.com/my-image.svg](https://imgur.com/a/pzKS6JS))
+
 
 > Полная архитектурная схема: `docs/architecture.drawio`
 
