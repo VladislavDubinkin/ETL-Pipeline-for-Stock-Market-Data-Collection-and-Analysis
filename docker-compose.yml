@@ -1,0 +1,102 @@
+services:
+  # Хранилище
+  postgres:
+    image: postgres:13
+    container_name: finance_warehouse
+    environment:
+      POSTGRES_USER: VladislavDubinkin
+      POSTGRES_PASSWORD: Hd060207
+      POSTGRES_DB: finance_dw
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "VladislavDubinkin"]
+      interval: 5s
+      retries: 5
+
+  # ETL-воркер (Python + PySpark)
+  etl-worker:
+    build: ./etl
+    container_name: finance_etl
+    volumes:
+      - ./data:/app/data
+      - ./etl:/app
+    command: tail -f /dev/null  # Держим контейнер "живым", тут Airflow будет запускать задачи внутри
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # БД для Airflow (отдельно от finance_dw)
+  airflow-db:
+    image: postgres:15
+    container_name: airflow_db
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+
+  # Тут инициализирую непосредственно Airflow 
+  airflow-init:
+    image: apache/airflow:2.9.0
+    container_name: airflow_init
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    volumes:
+      - ./dags:/opt/airflow/dags
+    command: >
+      bash -c "airflow db migrate && airflow users create --username VladislavDubinkin --password Hd060207 --firstname Vladislav --lastname Dubinkin --role Admin --email vladislavdullad@gmail.com"
+
+  # Для Airflow Web UI
+  airflow-webserver:
+    image: apache/airflow:2.9.0
+    container_name: airflow_webserver
+    depends_on:
+      - airflow-init
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      _PIP_ADDITIONAL_REQUIREMENTS: "apache-airflow-providers-docker"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: webserver
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      retries: 5
+
+  # Airflow Scheduler
+  airflow-scheduler:
+    image: apache/airflow:2.9.0
+    container_name: airflow_scheduler
+    depends_on:
+      - airflow-init
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      _PIP_ADDITIONAL_REQUIREMENTS: "apache-airflow-providers-docker"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: scheduler
+
+volumes:
+  pg_data:
+  airflow_pg_data:
