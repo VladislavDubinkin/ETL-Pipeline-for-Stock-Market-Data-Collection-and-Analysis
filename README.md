@@ -1,154 +1,143 @@
 # ETL Pipeline for Stock Market Data Collection and Analysis
-
-В этом проекте я постарался рарзработать и имплементировать автоматизированный ETL-пайплайн для сбора, обработки и хранения биржевых данных с оркестрацией через Apache Airflow. Приятного прочтения!
-
----
-
-
-## Архитектура:
+ 
+Automated ETL pipeline for financial market data — PySpark transformations,
+Apache Airflow orchestration, PostgreSQL storage, Docker deployment.
+ 
+## Overview
+ 
+Ingests daily OHLCV data for 4 instruments (AAPL, NVDA, TSLA, BTC-USD) from
+Yahoo Finance, applies PySpark window-function transformations (7-day moving
+average, data cleansing), and loads results into PostgreSQL via JDBC.
+Orchestrated via Apache Airflow with a weekday schedule and automatic retry
+on failure — zero manual intervention required.
+ 
+## Architecture
 
 ![Architecture](./Demonstration%20(images)/Architecture.svg)
 
 ---
 
-## Стэк:
-
-| Этап: | Стэк: |
-|---|---|
-| Extract | Python 3.11, yfinance |
-| Transform | PySpark 4.0, оконные функции |
-| Load | PostgreSQL 13, JDBC |
-| Orchestration | Apache Airflow 2.9.0 |
-| Infrastructure | Docker, Docker Compose |
-
----
-
-## Структура проекта:
-
+## Stack
+ 
+| Layer          | Technology                              |
+|----------------|-----------------------------------------|
+| Ingestion      | Python 3.11, yfinance                   |
+| Transformation | PySpark 4.0 — window functions, JDBC    |
+| Storage        | PostgreSQL 13                           |
+| Orchestration  | Apache Airflow 2.9.0                    |
+| Infrastructure | Docker, Docker Compose                  |
+ 
+## Project Structure
+ 
 ```
 finance_etl/
 ├── dags/
 │   └── finance_etl_dag.py     # Airflow DAG: extract >> transform
 ├── etl/
 │   ├── Dockerfile
-│   ├── extract.py             # Загрузка данных через yfinance
-│   ├── transform.py           # PySpark: очистка, анализ, загрузка в БД
+│   ├── extract.py             # Data ingestion via yfinance API
+│   ├── transform.py           # PySpark: cleansing, MA_7 calculation, JDBC load
 │   ├── requirements.txt
-│   └── postgresql-42.7.5.jar  # JDBC драйвер
-├── data/
-│   └── raw/                  
-├── .env.example               # Шаблон переменных окружения
+│   └── postgresql-42.7.5.jar  # JDBC driver
+├── .env.example               # Environment variable template (no secrets)
 ├── .gitignore
 ├── docker-compose.yml
 └── README.md
 ```
-
----
-
-## Быстрый старт:
-
-### 1. Клон репозитория:
-
+ 
+## Quick Start
+ 
+### 1. Clone the repository
+ 
 ```bash
-git clone https://github.com/ВАШ_USERNAME/finance-etl.git
-cd finance-etl
+git clone https://github.com/VladislavDubinkin/ETL-Pipeline-for-Stock-Market-Data-Collection-and-Analysis.git
+cd ETL-Pipeline-for-Stock-Market-Data-Collection-and-Analysis
 ```
-
-### 2. Настройка переменные окружения:
-
+ 
+### 2. Configure environment variables
+ 
 ```bash
 cp .env.example .env
-# Отредактировать .env: указать свои POSTGRES_USER и POSTGRES_PASSWORD
+# Edit .env: set POSTGRES_USER and POSTGRES_PASSWORD
 ```
-
-### 3. Создание папки для DAGов:
-
-```bash
-mkdir dags
-```
-
-### 4. Запуск все сервисы:
-
+ 
+### 3. Start all services
+ 
 ```bash
 docker-compose up --build -d
 ```
-
-### 5. Проверка (что всё запустилось):
-
+ 
+### 4. Verify containers are running
+ 
 ```bash
 docker-compose ps
 ```
-
-### 6. Заход в Airflow UI по ссылке:
-
+ 
+All services should show status `running` or `healthy`.
+ 
+### 5. Open Airflow UI
+ 
 ```
 http://localhost:8080
-Логин: admin
-Пароль: admin
+Username: admin
+Password: admin
 ```
-
-### 7. Запуск самого пайплайна:
-
-В Airflow UI найти DAG `finance_etl` → включить тумблер → нажать ▶ (Trigger DAG).
-
-### 8. Проверка данных в PostgreSQL:
-
+ 
+### 6. Trigger the pipeline
+ 
+In Airflow UI: find `finance_etl` DAG → enable the toggle → click ▶ Trigger DAG.
+ 
+### 7. Verify data in PostgreSQL
+ 
 ```bash
-docker exec finance_warehouse psql -U ВАШ_USERNAME -d finance_dw -c "SELECT ticker, COUNT(*) as rows, MIN(\"Date\") as from_date, MAX(\"Date\") as to_date FROM fact_stocks GROUP BY ticker;"
+docker exec finance_warehouse psql -U postgres -d finance_dw \
+  -c "SELECT ticker, COUNT(*) AS rows, \
+             MIN(\"Date\") AS from_date, \
+             MAX(\"Date\") AS to_date \
+      FROM fact_stocks \
+      GROUP BY ticker;"
 ```
-
----
-
-## Итог:
-
-После успешного запуска в таблице будут данные:
-
-
+ 
+## DAG Structure
+ 
 ```
- ticker  | rows | from_date  |  to_date
----------+------+------------+------------
- AAPL    |  789 | 2024-01-01 | 2026-02-27
- BTC-USD |  789 | 2024-01-01 | 2026-02-27
- NVDA    |  789 | 2024-01-01 | 2026-02-27
- TSLA    |  789 | 2024-01-01 | 2026-02-27
+extract ──► transform
 ```
-
-Схема таблички:
-
-| Колонка | Тип | Описание |
-|---|---|---|
-| Date | DATE | Дата торгов |
-| ticker | VARCHAR | Тикер инструмента |
-| Close | NUMERIC | Цена закрытия |
-| MA_7 | NUMERIC | 7-дневное скользящее среднее |
-
----
-
-## Как работает DAG:
-
-```
-extract  ──►  transform
-```
-
-- **extract** — запускает файл `extract.py`, он скачивает данные с Yahoo Finance для 4 компаний (AAPL, NVDA, TSLA, BTC-USD) и сохраняет CSV в `data/raw/`.
-- **transform** — запускает `transform.py`, он в свою очередь читает CSV через PySpark, считает скользящую среднюю через оконные функции, загружает результат в PostgreSQL уже через JDBC.
-
-Расписание: каждый будний день в 06:00 UTC (`0 6 * * 1-5`)
-
----
-
-## Скриншоты:
-
-### Airflow DAG — успешный запуск
+ 
+**extract** — fetches daily OHLCV data from Yahoo Finance for 4 instruments
+(AAPL, NVDA, TSLA, BTC-USD) and saves raw CSVs to `data/raw/`.
+ 
+**transform** — reads raw CSVs via PySpark, computes 7-day moving averages
+using window functions, and loads results into PostgreSQL via JDBC.
+ 
+**Schedule:** weekdays at 06:00 UTC (`0 6 * * 1-5`).
+Auto-restart on task failure — no manual intervention needed.
+ 
+## Output Schema
+ 
+| Column | Type    | Description               |
+|--------|---------|---------------------------|
+| Date   | DATE    | Trading date              |
+| ticker | VARCHAR | Instrument symbol         |
+| Close  | NUMERIC | Daily closing price       |
+| MA_7   | NUMERIC | 7-day moving average      |
+ 
+## Screenshots
+ 
+### Airflow DAG — successful run
 > ![DAG](./Demonstration%20(images)/5264992369000520112.jpg)
 
-### Данные в PostgreSQL
+### Data in PostgreSQL
 > ![DAG](./Demonstration%20(images)/5265140974868960806.jpg)
 
-### MA_7 для NVDA
+### MA_7 for NVDA
 > ![DAG](./Demonstration%20(images)/5265140974868960807.jpg)
 
-### Docker Desktop
-> ![DAG](./Demonstration%20(images)/Docker.png)
+## Known Limitations
+ 
+- Pipeline uses batch ingestion (daily schedule); no real-time streaming layer
+  in this iteration.
+- Dataset covers 2024–2026 (Yahoo Finance historical data); live trading data
+  requires API key configuration in `.env`.
 
 ---
