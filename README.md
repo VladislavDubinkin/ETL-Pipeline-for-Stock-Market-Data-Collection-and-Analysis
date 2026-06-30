@@ -1,4 +1,4 @@
-# 📈 ETL Pipeline for Stock Market Data Collection and Analysis
+# ETL Pipeline for Stock Market Data Collection and Analysis
 
 В этом проекте я постарался рарзработать и имплементировать автоматизированный ETL-пайплайн для сбора, обработки и хранения биржевых данных с оркестрацией через Apache Airflow. Приятного прочтения!
 
